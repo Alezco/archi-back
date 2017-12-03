@@ -1,13 +1,20 @@
 from flask import *
 from lists import *
 from cards import *
+from utils import *
+from flask_cors import CORS, cross_origin
+import json
 
 app = Flask(__name__)
 
+cors = CORS(app, resources={r"/*": {"origins": "*"}})
+app.config['CORS_HEADERS'] = 'Content-Type'
 
-@app.route('/lists', methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
-def lists():
-    params = request.form.to_dict()
+
+@app.route('/', methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
+@cross_origin()
+def root():
+    params = request.get_json()
     if request.method == 'GET':
         return index_handler()
     elif request.method == 'POST':
@@ -19,13 +26,13 @@ def lists():
     elif request.method == 'OPTIONS':
         return options_handler()
     else:
-        print('Unhandled request')
-        return Response('Unhandled request')
+        return response(404, {})
 
 
 @app.route('/cards', methods=['POST', 'DELETE', 'OPTIONS'])
+@cross_origin()
 def cards():
-    params = request.form.to_dict()
+    params = request.get_json()
     if request.method == 'POST':
         return create_handler_cards(params)
     elif request.method == 'DELETE':
@@ -33,7 +40,6 @@ def cards():
     elif request.method == 'OPTIONS':
         return options_handler_cards()
     else:
-        print('Unhandled request')
-        return Response('Unhandled request')
+        return response(404, {})
 
 app.run()

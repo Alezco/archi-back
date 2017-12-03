@@ -14,7 +14,7 @@ def index_handler():
                 cards.append(j)
         item = {
             'id': i['id'],
-            'name': i['name'],
+            'title': i['name'],
             'cards': cards
         }
         res.append(item)
@@ -22,17 +22,18 @@ def index_handler():
 
 
 def create_handler(params):
+    print(params)
     id = db.write('INSERT INTO lists(name) VALUES("' + params['title'] + '")')
     return response(200, json.dumps({'id': id}))
 
 
 def update_handler(params):
-    db.write('UPDATE lists SET name = "' + params['title'] + '" WHERE lists.id = ' + params['id'])
+    db.write('UPDATE lists SET name = "' + params['title'] + '" WHERE lists.id = ' + str(params['id']))
     return response(200, {})
 
 
 def delete_handler(params):
-    db.write('DELETE FROM lists WHERE id = ' + params['id'])
+    db.write('DELETE FROM lists WHERE id = ' + str(params['id']))
     return response(200, {})
 
 

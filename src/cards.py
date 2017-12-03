@@ -16,7 +16,7 @@ def create_handler_cards(params):
 
 
 def delete_handler_cards(params):
-    db.write('DELETE FROM cards WHERE id = ' + params['id'])
+    db.write('DELETE FROM cards WHERE id = ' + str(params['id']))
     return response(200, {})
 
 
