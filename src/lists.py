@@ -1,12 +1,11 @@
-import uuid
 import json
 import db
 from utils import *
 
 
 def index_handler():
-    table_results = db.execute('SELECT * FROM lists')
-    cards_results = db.execute('SELECT * FROM cards')
+    table_results = db.read('SELECT * FROM lists')
+    cards_results = db.read('SELECT * FROM cards')
     res = []
     for i in table_results:
         cards = []
@@ -23,25 +22,17 @@ def index_handler():
 
 
 def create_handler(params):
-    id = db.insert('INSERT INTO lists(name) VALUES("' + params['title'] + '")')
+    id = db.write('INSERT INTO lists(name) VALUES("' + params['title'] + '")')
     return response(200, json.dumps({'id': id}))
 
 
 def update_handler(params):
-    # TODO Add db handling
-    '''utils.dynamodb.update_item(table_name, {'id': params['id']},
-                                           {'attribute': 'title', 'value': params['title']})'''
+    db.write('UPDATE lists SET name = "' + params['title'] + '" WHERE lists.id = ' + params['id'])
     return response(200, {})
 
 
 def delete_handler(params):
-    # TODO Add db handling
-    '''params = json.loads(params["body"])
-    dynamodb = boto3.client('dynamodb')
-    dynamodb.delete_item(TableName=table_name,
-                         Key={
-                             'id': {'S': params['id']}
-                         })'''
+    db.write('DELETE FROM lists WHERE id = ' + params['id'])
     return response(200, {})
 
 

@@ -1,7 +1,7 @@
 import MySQLdb
 
 
-def execute(query):
+def read(query):
     connector = MySQLdb.connect(user='root', password='password', host='127.0.0.1', database='archi')
     cursor = connector.cursor()
     cursor.execute(query)
@@ -15,7 +15,7 @@ def execute(query):
     return json_data
 
 
-def insert(query):
+def write(query):
     connector = MySQLdb.connect(user='root', password='password', host='127.0.0.1', database='archi')
     cursor = connector.cursor()
     cursor.execute(query)
