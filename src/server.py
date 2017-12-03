@@ -1,22 +1,23 @@
 from flask import *
 from lists import *
-import cards
+from cards import *
 
 app = Flask(__name__)
 
 
 @app.route('/lists', methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
 def lists():
+    params = request.form.to_dict()
     if request.method == 'GET':
         return index_handler()
     elif request.method == 'POST':
-        return lists.create_handler(None)
+        return create_handler(params)
     elif request.method == 'PATCH':
-        return lists.update_handler(None)
+        return update_handler(params)
     elif request.method == 'DELETE':
-        return lists.delete_handler(None)
+        return delete_handler(params)
     elif request.method == 'OPTIONS':
-        return lists.options_handler()
+        return options_handler()
     else:
         print('Unhandled request')
         return Response('Unhandled request')
@@ -24,12 +25,13 @@ def lists():
 
 @app.route('/cards', methods=['POST', 'DELETE', 'OPTIONS'])
 def cards():
+    params = request.form.to_dict()
     if request.method == 'POST':
-        return cards.create_handler(None)
+        return create_handler_cards(params)
     elif request.method == 'DELETE':
-        return cards.delete_handler(None)
+        return delete_handler_cards(params)
     elif request.method == 'OPTIONS':
-        return cards.options_handler()
+        return options_handler_cards()
     else:
         print('Unhandled request')
         return Response('Unhandled request')

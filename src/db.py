@@ -13,3 +13,14 @@ def execute(query):
     cursor.close()
     connector.close()
     return json_data
+
+
+def insert(query):
+    connector = MySQLdb.connect(user='root', password='password', host='127.0.0.1', database='archi')
+    cursor = connector.cursor()
+    cursor.execute(query)
+    last_id = cursor.lastrowid
+    cursor.close()
+    connector.commit()
+    connector.close()
+    return last_id

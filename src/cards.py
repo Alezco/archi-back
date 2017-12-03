@@ -4,7 +4,7 @@ import db
 from utils import *
 
 
-def create_handler(params):
+def create_handler_cards(params):
     # TODO Add db handling
     '''params = json.loads(params["body"])
     list = dynamodb.get_item(table_name, {'id': params['list_id']})
@@ -20,7 +20,7 @@ def create_handler(params):
     return response(200, card)'''
 
 
-def delete_handler(params):
+def delete_handler_cards(params):
     # TODO Add db handling
     '''params = json.loads(params["body"])
     list = dynamodb.get_item(table_name, {'id': params['list_id']})
@@ -30,5 +30,5 @@ def delete_handler(params):
     return response(200, {})
 
 
-def options_handler():
+def options_handler_cards():
     return response(200, {})

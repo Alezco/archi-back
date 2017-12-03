@@ -23,16 +23,8 @@ def index_handler():
 
 
 def create_handler(params):
-    # TODO Add db handling
-    '''params = json.loads(params["body"])
-    dynamodb = boto3.client('dynamodb')
-    l = {
-        'id': {'S': str(uuid.uuid4())},
-        'title': {'S': params["title"]},
-        'cards': {'L': []}
-    }
-    dynamodb.put_item(TableName=table_name, Item=l)
-    return response(200, {'id': l['id']['S']})'''
+    id = db.insert('INSERT INTO lists(name) VALUES("' + params['title'] + '")')
+    return response(200, json.dumps({'id': id}))
 
 
 def update_handler(params):
