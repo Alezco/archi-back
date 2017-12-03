@@ -13,7 +13,7 @@ CREATE TABLE cards (
     question VARCHAR(256),
     date VARCHAR(256),
     listId INT,
-    FOREIGN KEY cards(listId) REFERENCES lists(id)
+    FOREIGN KEY cards(listId) REFERENCES lists(id) ON DELETE CASCADE
 );
 
 INSERT INTO lists(name) VALUES("list1");

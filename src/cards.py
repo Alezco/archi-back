@@ -1,32 +1,22 @@
-import uuid
 import json
 import db
 from utils import *
 
 
 def create_handler_cards(params):
-    # TODO Add db handling
-    '''params = json.loads(params["body"])
-    list = dynamodb.get_item(table_name, {'id': params['list_id']})
     card = {
-        'id': str(uuid.uuid4()),
-        'question': params["question"],
-        'answer': params["answer"],
-        'date': params["date"],
+        'answer': params['answer'],
+        'question': params['question'],
+        'date': params['date'],
+        'listId': params['list_id']
     }
-    cards = list['cards']
-    cards.append(card)
-    dynamodb.update_item(table_name, {'id': list['id']}, {'attribute': 'cards', 'value': cards})
-    return response(200, card)'''
+    card['id'] = db.write('INSERT INTO cards(answer, question, date, listId) VALUES("' +
+                          card['answer'] + '", "' + card['question'] + '", "' + card['date'] + '", "' + card['listId'] + '")')
+    return response(200, json.dumps(card))
 
 
 def delete_handler_cards(params):
-    # TODO Add db handling
-    '''params = json.loads(params["body"])
-    list = dynamodb.get_item(table_name, {'id': params['list_id']})
-    card_id = params['card_id']
-    cards = [card for card in list['cards'] if card['id'] != card_id]
-    dynamodb.update_item(table_name, {'id': list['id']}, {'attribute': 'cards', 'value': cards})'''
+    db.write('DELETE FROM cards WHERE id = ' + params['id'])
     return response(200, {})
 
 
