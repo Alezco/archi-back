@@ -11,7 +11,7 @@ def create_handler_cards(params):
         'listId': params['list_id']
     }
     card['id'] = db.write('INSERT INTO cards(answer, question, date, listId) VALUES("' +
-                          card['answer'] + '", "' + card['question'] + '", "' + card['date'] + '", "' + card['listId'] + '")')
+                          card['answer'] + '", "' + card['question'] + '", "' + card['date'] + '", "' + str(card['listId']) + '")')
     return response(200, json.dumps(card))
 
 

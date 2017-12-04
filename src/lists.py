@@ -4,6 +4,7 @@ from utils import *
 
 
 def index_handler():
+    print('index handler')
     table_results = db.read('SELECT * FROM lists')
     cards_results = db.read('SELECT * FROM cards')
     res = []
@@ -22,7 +23,6 @@ def index_handler():
 
 
 def create_handler(params):
-    print(params)
     id = db.write('INSERT INTO lists(name) VALUES("' + params['title'] + '")')
     return response(200, json.dumps({'id': id}))
 
