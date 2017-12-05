@@ -13,7 +13,6 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 @app.route('/lists', methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
 @cross_origin()
 def lists():
-    print('lists')
     if request.method == 'GET':
         return index_handler()
     elif request.method == 'POST':
@@ -32,7 +31,6 @@ def lists():
 @app.route('/cards', methods=['POST', 'DELETE', 'OPTIONS'])
 @cross_origin()
 def cards():
-    print('cards')
     params = request.get_json()
     if request.method == 'POST':
         return create_handler_cards(params)
@@ -43,4 +41,4 @@ def cards():
     else:
         return response(404, {})
 
-app.run()
+app.run(host='0.0.0.0')

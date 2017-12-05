@@ -4,7 +4,6 @@ from utils import *
 
 
 def index_handler():
-    print('index handler')
     table_results = db.read('SELECT * FROM lists')
     cards_results = db.read('SELECT * FROM cards')
     res = []
