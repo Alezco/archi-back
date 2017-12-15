@@ -11,6 +11,49 @@
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair.",
       "Default": "laptop"
     },
+	
+	"DBName": {
+      "Default": "archi",
+      "Description" : "MySQL database name",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "DBUser": {
+      "NoEcho": "true",
+      "Description" : "Username for MySQL database access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters.",
+	  "Default": "root"
+    },
+
+    "DBPassword": {
+      "NoEcho": "true",
+      "Description" : "Password MySQL database access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "41",
+      "AllowedPattern" : "[a-zA-Z0-9]*",
+      "ConstraintDescription" : "must contain only alphanumeric characters.",
+	  "Default": "password"
+    },
+
+    "DBRootPassword": {
+      "NoEcho": "true",
+      "Description" : "Root password for MySQL",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "41",
+      "AllowedPattern" : "[a-zA-Z0-9]*",
+      "ConstraintDescription" : "must contain only alphanumeric characters.",
+	  "Default": "password"
+    },
 
     "InstanceType" : {
       "Description" : "WebServer EC2 instance type",
@@ -78,7 +121,7 @@
       "Metadata" : {
         "AWS::CloudFormation::Init" : {
           "configSets" : {
-            "full_install" : [ "install_cfn", "install_node", "install_python", "start-application" ]
+            "full_install" : [ "install_cfn", "install_node", "install_python", "install_mysql", "configure_mysql", "install_application"]
           },
 
           "install_cfn" : {
@@ -122,7 +165,7 @@
 
           "install_node": {
             "sources" : {
-                "/home/ec2-user/flash-cards" : "https://github.com/paultrh/flash-card"
+                "/home/ec2-user/flash-cards" : "https://github.com/paultrh/flash-card/zipball/master"
             },
 
             "files": {
@@ -151,7 +194,7 @@
 		  
 		  "install_python": {
             "sources" : {
-                "/home/ec2-user/archi-back" : "https://github.com/Alezco/archi-back"
+                "/home/ec2-user/archi-back" : "https://github.com/Alezco/archi-back/zipball/master"
             },
 
             "files": {
@@ -161,9 +204,17 @@
                     "\n",
                     [
                       "#!/bin/bash",
-					  "sudo yum update",
-                      "sudo yum -y install python3 python3-pip libmysqlclient-dev",
-                      "pip3 install Flask Flask_Cors mysqlclient"
+					  "sudo yum -y update",
+					  "sudo yum -y install yum-utils",
+					  "sudo yum -y groupinstall \"Development tools\"",
+					  "sudo yum -y install python34",
+					  "sudo yum -y install python34-devel",
+					  "sudo yum -y install python34-setuptools",
+					  "sudo python3 /usr/lib/python3.4/dist-packages/easy_install.py pip",
+					  "sudo yum -y update",
+					  "sudo yum -y install python35u-pip",
+					  "sudo yum -y install mysql-devel",
+					  "yum install epel-release"
                     ]
                   ]
                 },
@@ -178,17 +229,75 @@
               }
             }
           },
+		  
+		  "install_mysql" : {
+            "packages" : {
+              "yum" : {
+                "mysql"        : [],
+                "mysql-server" : [],
+                "mysql-devel"  : [],
+                "mysql-libs"   : []
+              }
+            },
+
+            "files" : {
+              "/tmp/setup.mysql" : {
+                "content" : { "Fn::Join" : ["", [
+				  "DROP USER '", { "Ref" : "DBUser" }, "'@'localhost';\n",
+                  "CREATE USER '", { "Ref" : "DBUser" }, "'@'localhost' IDENTIFIED BY '", { "Ref" : "DBPassword" }, "';\n",
+				  "CREATE DATABASE ", { "Ref" : "DBName" }, ";\n",
+                  "GRANT ALL ON ", { "Ref" : "DBName" }, ".* TO '", { "Ref" : "DBUser" }, "'@'localhost';\n",
+                  "FLUSH PRIVILEGES;\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "mysqld" : { "enabled" : "true", "ensureRunning" : "true" }
+              }
+            }
+          },
+
+          "configure_mysql" : {
+            "commands" : {
+              "01_set_mysql_root_password" : {
+                "command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+              },
+              "02_create_database" : {
+                "command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/setup.mysql"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+              },
+			  "03_setup" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /home/ec2-user/archi-back/init_database.sql"]]}
+			  },
+              "04_cleanup" : {
+                "command" : "rm /tmp/setup.mysql"
+              }
+            }
+          },
 
           "install_application" : {
             "files" : {
               "/home/ec2-user/start-application" : {
                 "content" : { "Fn::Join" : ["", [
                   "#!/bin/bash\n",
+				  "sudo echo ", "export default { IPV4: ", ">> /var/log/env.js\n",
+				  "export IPV4=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)\n",
+				  "sudo echo \\'$IPV4\\' >> /var/log/env.js\n",
+				  "sudo echo ", "}", " >> /var/log/env.js\n",
                   "cd /home/ec2-user/flash-cards\n",
                   "sudo npm install\n",
-                  "sudo nohup npm start &\n",
+                  "sudo nohup bash -c \"npm start\" &\n",
                   "cd /home/ec2-user/archi-back\n",
-                  "sudo nohup python3 src/server.py\n "
+                  "sudo /usr/local/bin/pip3 install Flask\n",
+				  "sudo /usr/local/bin/pip3 install Flask_Cors\n",
+				  "sudo /usr/local/bin/pip3 install mysqlclient\n",
+                  "sudo nohup bash -c \"python3 src/server.py\" &\n "
                 ]]},
                 "mode"  : "000500",
                 "owner" : "root",
@@ -197,7 +306,7 @@
             },
             "commands" : {
               "01_start_application" : {
-                "command" : "/home/ec2-user/start-application"
+                "command" : "/home/ec2-user/start-application > /var/log/install_start.log"
               }
             }
           }
@@ -239,6 +348,7 @@
         "SecurityGroupIngress" : [
           {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"},
 		  {"IpProtocol" : "tcp", "FromPort" : "8080", "ToPort" : "8080", "CidrIp" : "0.0.0.0/0"},
+		  {"IpProtocol" : "tcp", "FromPort" : "5000", "ToPort" : "5000", "CidrIp" : "0.0.0.0/0"},
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
         ]
       }
