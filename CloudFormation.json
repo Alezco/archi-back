@@ -566,13 +566,13 @@
         "CrossZone" : "true",
         "Listeners" : [ {
           "LoadBalancerPort" : "80",
-          "InstancePort" : "80",
+          "InstancePort" : "8080",
           "Protocol" : "HTTP"
         } ],
         "HealthCheck" : {
-          "Target" : "HTTP:80/",
+          "Target" : "HTTP:8080/",
           "HealthyThreshold" : "3",
-          "UnhealthyThreshold" : "5",
+          "UnhealthyThreshold" : "6",
           "Interval" : "30",
           "Timeout" : "5"
         }
