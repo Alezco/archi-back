@@ -1,8 +1,9 @@
 import MySQLdb
 
+import Constants
 
 def read(query):
-    connector = MySQLdb.connect(user='root', password='password', host='localhost', database='archi')
+    connector = MySQLdb.connect(user='root', password='password', host=Constants.HOST, database='archi')
     cursor = connector.cursor()
     cursor.execute(query)
     res = cursor.fetchall()
@@ -16,7 +17,7 @@ def read(query):
 
 
 def write(query):
-    connector = MySQLdb.connect(user='root', password='password', host='localhost', database='archi')
+    connector = MySQLdb.connect(user='root', password='password', host=Constants.HOST, database='archi')
     cursor = connector.cursor()
     cursor.execute(query)
     last_id = cursor.lastrowid
