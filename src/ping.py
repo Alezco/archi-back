@@ -10,7 +10,7 @@ for i in range(0, 10000):
         print("active")
     else:
         print("inactive")
-        result2 = subprocess.Popen(['/home/ec2-user/passRoMaster'], shell=True, executable="/bin/bash").wait()
+        result2 = subprocess.Popen(['/home/ec2-user/passToMaster'], shell=True, executable="/bin/bash").wait()
         if not result2:
             print("failed to move elasticIP")
         else:
