@@ -15,3 +15,4 @@ for i in range(0, 10000):
             print("failed to move elasticIP")
         else:
             print("elasticIP moved")
+        break
