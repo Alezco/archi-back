@@ -2,5 +2,5 @@
 # encoding: utf-8
 
 HOST = 'localhost'
-with open('./../SQLConfig.conf', 'r') as myfile:
+with open('/home/ec2-user/SQLConfig.conf', 'r') as myfile:
     HOST=myfile.read().replace('\n', '')
