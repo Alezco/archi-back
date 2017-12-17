@@ -33,6 +33,17 @@
       "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters.",
 	  "Default": "root"
     },
+	
+	"DBUserRemote": {
+      "NoEcho": "true",
+      "Description" : "Username for MySQL database access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters.",
+	  "Default": "hadrien"
+    },
 
     "DBPassword": {
       "NoEcho": "true",
@@ -279,7 +290,7 @@
         "Comment" : "Install a simple application",
         "AWS::CloudFormation::Init" : {
           "configSets" : {
-            "full_install" : [ "install_cfn", "install_node", "install_python", "install_mysql", "configure_mysql", "install_application"]
+            "full_install" : [ "install_cfn", "install_node", "install_python", "install_application"]
           },
 
           "install_cfn" : {
@@ -327,6 +338,11 @@
             },
 
             "files": {
+			 "/home/ec2-user/SQLConfig.conf" : {
+				"content" : {
+					"Fn::GetAtt": [ "BddEc2InstanceMASTER" , "PublicIp" ]
+				}
+			  },
               "/tmp/install_node": {
                 "content": {
                   "Fn::Join": [
@@ -608,7 +624,530 @@
           "CidrIp" : "0.0.0.0/0"
         }]
       }
+    },
+  
+  
+    "BddEc2InstanceMASTER": {
+      "Type": "AWS::EC2::Instance",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets" : {
+            "full_install" : [ "install_cfn", "install_node", "install_python", "install_mysql", "configure_mysql"]
+          },
+
+          "install_cfn" : {
+            "files" : {
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : { "Fn::Join" : ["", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.BddEc2InstanceMASTER.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                  "         --stack ", { "Ref" : "AWS::StackName" },
+                  "         --resource BddEc2InstanceMASTER ",
+                  "         --configsets full_install ",
+                  "         --region ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "cfn-hup" : { "enabled" : "true", "ensureRunning" : "true",
+                              "files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]}
+              }
+            }
+          },
+
+          "install_node": {
+            "sources" : {
+                "/home/ec2-user/flash-cards" : "https://github.com/paultrh/flash-card/zipball/master"
+            },
+
+            "files": {
+              "/tmp/install_node": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+                      "curl --silent --location https://rpm.nodesource.com/setup_8.x | sudo bash -",
+                      "sudo yum -y install nodejs"
+                    ]
+                  ]
+                },
+                "mode": "000500",
+                "owner": "root",
+                "group": "root"
+              }
+            },
+            "commands": {
+              "01_install_node": {
+                "command": "/tmp/install_node > /var/log/install_node.log"
+              }
+            }
+          },
+		  
+		  "install_python": {
+            "sources" : {
+                "/home/ec2-user/archi-back" : "https://github.com/Alezco/archi-back/zipball/master"
+            },
+
+            "files": {
+              "/tmp/install_python": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+					  "sudo yum -y update",
+					  "sudo yum -y install yum-utils",
+					  "sudo yum -y groupinstall \"Development tools\"",
+					  "sudo yum -y install python34",
+					  "sudo yum -y install python34-devel",
+					  "sudo yum -y install python34-setuptools",
+					  "sudo python3 /usr/lib/python3.4/dist-packages/easy_install.py pip",
+					  "sudo yum -y update",
+					  "sudo yum -y install python35u-pip",
+					  "sudo yum -y install mysql-devel",
+					  "yum install epel-release"
+                    ]
+                  ]
+                },
+                "mode": "000500",
+                "owner": "root",
+                "group": "root"
+              }
+            },
+            "commands": {
+              "01_install_python": {
+                "command": "/tmp/install_python > /var/log/install_python.log"
+              }
+            }
+          },
+		  
+		  "install_mysql" : {
+            "packages" : {
+              "yum" : {
+                "mysql"        : [],
+                "mysql-server" : [],
+                "mysql-devel"  : [],
+                "mysql-libs"   : []
+              }
+            },
+
+            "files" : {
+              "/tmp/setup.mysql" : {
+                "content" : { "Fn::Join" : ["", [
+				  "DROP USER '", { "Ref" : "DBUser" }, "'@'localhost';\n",
+                  "CREATE USER '", { "Ref" : "DBUser" }, "'@'localhost' IDENTIFIED BY '", { "Ref" : "DBPassword" }, "';\n",
+				  "CREATE USER '", { "Ref" : "DBUser" }, "'@'%' IDENTIFIED BY '", { "Ref" : "DBPassword" }, "';\n",
+				  "CREATE DATABASE ", { "Ref" : "DBName" }, ";\n",
+                  "GRANT ALL PRIVILEGES ON *.* TO '", { "Ref" : "DBUser" }, "'@'localhost' WITH GRANT OPTION;\n",
+				  "GRANT ALL PRIVILEGES ON *.* TO '", { "Ref" : "DBUser" }, "'@'%' WITH GRANT OPTION;\n",
+                  "FLUSH PRIVILEGES;\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+			  "/tmp/initMaster.mysql" : {
+                "content" : { "Fn::Join" : ["", [
+				  "CREATE USER 'slave'@'%' IDENTIFIED BY 'password';\n",
+				  "Grant replication slave on *.* to 'slave'@'%';\n",
+				  "FLUSH PRIVILEGES;\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+			  "/var/log/mysql-bin.log" : {
+                "content" : { "Fn::Join" : ["", [
+				  "log info"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "mysqld" : { "enabled" : "true", "ensureRunning" : "true" }
+              }
+            }
+          },
+
+          "configure_mysql" : {
+		  
+		  "files" : {
+			  "/etc/my.cnf" : {
+                "content" : { "Fn::Join" : ["", [
+				  "[mysqld]\n",
+				  "server-id=1\n",
+				  "datadir=/var/lib/mysql\n",
+				  "log-bin=/var/log/mysql-bin.log\n",
+				  "binlog-do-db = archi\n",
+				  "socket=/var/lib/mysql/mysql.sock\n",
+				  "symbolic-links=0\n",
+				  "[mysqld_safe]\n",
+				  "log-error=/var/log/mysqld.log\n",
+				  "pid-file=/var/run/mysqld/mysqld.pid\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+			  "/tmp/init_master" : {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+					  "sudo touch /var/log/mysql-bin.log",
+					  "sudo touch /var/log/mysqld.log",
+					  "sudo chown mysql -Rf /var/log/",
+					  "sudo service mysqld restart"
+                    ]
+                  ]
+                },
+                "mode"  : "000500",
+                "owner" : "root",
+                "group" : "root"
+              }
+		   },
+		  
+            "commands" : {
+              "01_set_mysql_root_password" : {
+                "command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+              },
+              "02_create_database" : {
+                "command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/setup.mysql"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/var/log/master.log); (( $? != 0 ))"]]}
+              },
+			  "03_setup" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /home/ec2-user/archi-back/init_database.sql"]]}
+			  },
+			  "04_initMaster" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/initMaster.mysql"]]}
+			  },
+			  "05_pre_stuff" : {
+				"command": "/tmp/init_master > /var/log/init_master.log"
+			  }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "InstanceType"   : { "Ref" : "InstanceType" },
+        "SecurityGroups" : [ {"Ref" : "WebServerSecurityGroup"} ],
+        "KeyName"        : { "Ref" : "KeyName" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "yum update -y aws-cfn-bootstrap\n",
+
+          "/opt/aws/bin/cfn-init -v ",
+          "         --stack ", { "Ref" : "AWS::StackId" },
+          "         --resource BddEc2InstanceMASTER ",
+          "         --configsets full_install ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+          "/opt/aws/bin/cfn-signal -e $? ",
+          "         --stack ", { "Ref" : "AWS::StackId" },
+          "         --resource BddEc2InstanceMASTER ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+	
+	"BddEc2InstanceSLAVE": {
+      "Type": "AWS::EC2::Instance",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets" : {
+            "full_install" : [ "install_cfn", "install_node", "install_python", "install_mysql", "configure_mysql"]
+          },
+
+          "install_cfn" : {
+            "files" : {
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : { "Fn::Join" : ["", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.BddEc2InstanceSLAVE.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                  "         --stack ", { "Ref" : "AWS::StackName" },
+                  "         --resource BddEc2InstanceSLAVE ",
+                  "         --configsets full_install ",
+                  "         --region ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "cfn-hup" : { "enabled" : "true", "ensureRunning" : "true",
+                              "files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]}
+              }
+            }
+          },
+
+          "install_node": {
+            "sources" : {
+                "/home/ec2-user/flash-cards" : "https://github.com/paultrh/flash-card/zipball/master"
+            },
+
+            "files": {
+              "/tmp/install_node": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+                      "curl --silent --location https://rpm.nodesource.com/setup_8.x | sudo bash -",
+                      "sudo yum -y install nodejs"
+                    ]
+                  ]
+                },
+                "mode": "000500",
+                "owner": "root",
+                "group": "root"
+              }
+            },
+            "commands": {
+              "01_install_node": {
+                "command": "/tmp/install_node > /var/log/install_node.log"
+              }
+            }
+          },
+		  
+		  "install_python": {
+            "sources" : {
+                "/home/ec2-user/archi-back" : "https://github.com/Alezco/archi-back/zipball/master"
+            },
+
+            "files": {
+              "/tmp/install_python": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+					  "sudo yum -y update",
+					  "sudo yum -y install yum-utils",
+					  "sudo yum -y groupinstall \"Development tools\"",
+					  "sudo yum -y install python34",
+					  "sudo yum -y install python34-devel",
+					  "sudo yum -y install python34-setuptools",
+					  "sudo python3 /usr/lib/python3.4/dist-packages/easy_install.py pip",
+					  "sudo yum -y update",
+					  "sudo yum -y install python35u-pip",
+					  "sudo yum -y install mysql-devel",
+					  "yum install epel-release"
+                    ]
+                  ]
+                },
+                "mode": "000500",
+                "owner": "root",
+                "group": "root"
+              }
+            },
+            "commands": {
+              "01_install_python": {
+                "command": "/tmp/install_python > /var/log/install_python.log"
+              }
+            }
+          },
+		  
+		  "install_mysql" : {
+            "packages" : {
+              "yum" : {
+                "mysql"        : [],
+                "mysql-server" : [],
+                "mysql-devel"  : [],
+                "mysql-libs"   : []
+              }
+            },
+
+            "files" : {
+              "/tmp/setup.mysql" : {
+                "content" : { "Fn::Join" : ["", [
+				  "DROP USER '", { "Ref" : "DBUser" }, "'@'localhost';\n",
+                  "CREATE USER '", { "Ref" : "DBUser" }, "'@'localhost' IDENTIFIED BY '", { "Ref" : "DBPassword" }, "';\n",
+				  "CREATE USER '", { "Ref" : "DBUser" }, "'@'%' IDENTIFIED BY '", { "Ref" : "DBPassword" }, "';\n",
+				  "CREATE DATABASE ", { "Ref" : "DBName" }, ";\n",
+                  "GRANT ALL PRIVILEGES ON *.* TO '", { "Ref" : "DBUser" }, "'@'localhost' WITH GRANT OPTION;\n",
+				  "GRANT ALL PRIVILEGES ON *.* TO '", { "Ref" : "DBUser" }, "'@'%' WITH GRANT OPTION;\n",
+                  "FLUSH PRIVILEGES;\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "mysqld" : { "enabled" : "true", "ensureRunning" : "true" }
+              }
+            }
+          },
+
+          "configure_mysql" : {
+		  
+		  "files" : {
+			  "/etc/my.cnf" : {
+                "content" : { "Fn::Join" : ["", [
+				  "[mysqld]\n",
+				  "server-id=2",
+				  "\n",
+				  "datadir=/var/lib/mysql\n",
+				  "socket=/var/lib/mysql/mysql.sock\n",
+				  "symbolic-links=0\n",
+				  "[mysqld_safe]\n",
+				  "log-error=/var/log/mysqld.log\n",
+				  "pid-file=/var/run/mysqld/mysqld.pid\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+			  "/tmp/init_slave" : {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+					  "sudo touch /var/log/mysql-bin.log",
+					  "sudo touch /var/log/mysqld.log",
+					  "sudo chown mysql -Rf /var/log/",
+					  "sudo service mysqld restart"
+                    ]
+                  ]
+                },
+                "mode"  : "000500",
+                "owner" : "root",
+                "group" : "root"
+              },
+			  "/tmp/initSlave.mysql" : {
+                "content" : { "Fn::Join" : ["", [
+				  "stop slave;\n",
+				  "CHANGE MASTER TO MASTER_HOST='", { "Fn::GetAtt": [ "BddEc2InstanceMASTER" , "PublicIp" ] } ,"', MASTER_USER='slave', MASTER_PASSWORD='password', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=107;\n",
+				  "start slave;\n"
+                  ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              }
+		   },
+		  
+		  
+		  
+            "commands" : {
+              "01_set_mysql_root_password" : {
+                "command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+              },
+              "02_create_database" : {
+                "command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/setup.mysql"]]},
+                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+              },
+			  "03_setup" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /home/ec2-user/archi-back/init_database.sql"]]}
+			  },
+			  "04_pre_stuff" : {
+				"command": "/tmp/init_slave > /var/log/init_slave.log"
+			  },
+			  "05_slave_init" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/initSlave.mysql"]]}
+			  }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "InstanceType"   : { "Ref" : "InstanceType" },
+        "SecurityGroups" : [ {"Ref" : "WebServerSecurityGroup"} ],
+        "KeyName"        : { "Ref" : "KeyName" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "yum update -y aws-cfn-bootstrap\n",
+
+          "/opt/aws/bin/cfn-init -v ",
+          "         --stack ", { "Ref" : "AWS::StackId" },
+          "         --resource BddEc2InstanceSLAVE ",
+          "         --configsets full_install ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+          "/opt/aws/bin/cfn-signal -e $? ",
+          "         --stack ", { "Ref" : "AWS::StackId" },
+          "         --resource BddEc2InstanceSLAVE ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT30M"
+        }
+      }
+    },
+
+    "WebServerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTP, server port and SSH access",
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"},
+		  {"IpProtocol" : "tcp", "FromPort" : "8080", "ToPort" : "8080", "CidrIp" : "0.0.0.0/0"},
+		  {"IpProtocol" : "tcp", "FromPort" : "5000", "ToPort" : "5000", "CidrIp" : "0.0.0.0/0"},
+		  {"IpProtocol" : "tcp", "FromPort" : "3306", "ToPort" : "3306", "CidrIp" : "0.0.0.0/0"},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
+        ]
+      }
     }
+  
+  
+  
   },
 
   "Outputs" : {
