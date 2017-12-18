@@ -338,11 +338,6 @@
             },
 
             "files": {
-			 "/home/ec2-user/SQLConfig.conf" : {
-				"content" : {
-					"Fn::GetAtt": [ "BddEc2InstanceMASTER" , "PublicIp" ]
-				}
-			  },
               "/tmp/install_node": {
                 "content": {
                   "Fn::Join": [
@@ -437,6 +432,12 @@
           },
 
           "configure_mysql" : {
+		  
+			
+		  
+		  
+		  
+		  
             "commands" : {
               "01_set_mysql_root_password" : {
                 "command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
@@ -481,6 +482,12 @@
               }
             },
             "commands" : {
+			  "07_confeip" : {
+				"command" : "sudo touch /home/ec2-user/archi-back/src/confeip.json && sudo aws configure set region eu-west-2 && sudo aws ec2 describe-addresses > /home/ec2-user/archi-back/src/confeip.json"
+			  },
+			  "08_getIEP" : {
+				"command" : "cd /home/ec2-user/archi-back/ && sudo python3 /home/ec2-user/archi-back/src/eip.py > /var/log/iepGet.log &"
+			  },
               "01_start_application" : {
                 "command" : "setsid /home/ec2-user/start-application >/dev/null 2>&1 < /dev/null &"
               },
@@ -496,6 +503,7 @@
         "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
                                           { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
         "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+		"IamInstanceProfile" : { "Ref" : "RootInstanceProfile" },
         "InstanceType" : { "Ref" : "InstanceType" },
         "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
              "#!/bin/bash -xe\n",
@@ -515,6 +523,8 @@
       }
     },
 
+	
+	
     "WebServerScaleUpPolicy" : {
       "Type" : "AWS::AutoScaling::ScalingPolicy",
       "Properties" : {
@@ -626,6 +636,22 @@
       }
     },
   
+  
+  
+	"MyEIPMaster" : {
+		"Type" : "AWS::EC2::EIP",
+		"Properties" : {
+			"InstanceId" : { "Ref" : "BddEc2InstanceMASTER" }
+		}
+	},
+	 
+	"IPAssocInitMASTER" : {
+         "Type" : "AWS::EC2::EIPAssociation",
+         "Properties" : {
+             "InstanceId" : { "Ref" : "BddEc2InstanceMASTER" },
+             "EIP" : {"Ref": "MyEIPMaster" }
+         }
+     },
   
     "BddEc2InstanceMASTER": {
       "Type": "AWS::EC2::Instance",
@@ -1033,7 +1059,28 @@
 
           "configure_mysql" : {
 		  
-		  "files" : {
+			"files" : {
+				"/home/ec2-user/stopSlave" : {
+					"content" : { "Fn::Join" : ["", [
+					  "#!/bin/bash\n",
+					  "mysql -u root -ppassword < STOP SLAVE;"
+					]]},
+					"mode"  : "000500",
+					"owner" : "root",
+					"group" : "root"
+              },
+				"/home/ec2-user/passToMaster" : {
+					"content" : { "Fn::Join" : ["", [
+					  "#!/bin/bash\n",
+					  "aws configure set region eu-west-2\n",
+					  "aws ec2 associate-address --instance-id ",
+					  "$(curl http://169.254.169.254/latest/meta-data/instance-id) ",
+					  "--public-ip "
+					]]},
+					"mode"  : "000500",
+					"owner" : "root",
+					"group" : "root"
+              },
 			  "/etc/my.cnf" : {
                 "content" : { "Fn::Join" : ["", [
 				  "[mysqld]\n",
@@ -1070,36 +1117,72 @@
 			  "/tmp/initSlave.mysql" : {
                 "content" : { "Fn::Join" : ["", [
 				  "stop slave;\n",
-				  "CHANGE MASTER TO MASTER_HOST='", { "Fn::GetAtt": [ "BddEc2InstanceMASTER" , "PublicIp" ] } ,"', MASTER_USER='slave', MASTER_PASSWORD='password', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=107;\n",
+				  "CHANGE MASTER TO MASTER_HOST='XXXXXX', MASTER_USER='slave', MASTER_PASSWORD='password', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=107;\n",
 				  "start slave;\n"
                   ]]},
                 "mode"  : "000400",
                 "owner" : "root",
                 "group" : "root"
+              },
+			  "/tmp/sedstuff" : {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/bash",
+					  "sudo sed -i \"s/XXXXXX/$(sed 's:/:\\/:g' /home/ec2-user/SQLConfig.conf)/\" /tmp/initSlave.mysql"
+                    ]
+                  ]
+                },
+                "mode"  : "000500",
+                "owner" : "root",
+                "group" : "root"
               }
 		   },
 		  
-		  
-		  
-            "commands" : {
-              "01_set_mysql_root_password" : {
-                "command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
-                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
-              },
-              "02_create_database" : {
-                "command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/setup.mysql"]]},
-                "test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
-              },
+			"commands" : {
+			  "01_set_mysql_root_password" : {
+				"command" : { "Fn::Join" : ["", ["mysqladmin -u root password '", { "Ref" : "DBRootPassword" }, "'"]]},
+				"test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+			  },
+			  "02_create_database" : {
+				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/setup.mysql"]]},
+				"test" : { "Fn::Join" : ["", ["$(mysql ", { "Ref" : "DBName" }, " -u root --password='", { "Ref" : "DBRootPassword" }, "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"]]}
+			  },
 			  "03_setup" : {
 				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /home/ec2-user/archi-back/init_database.sql"]]}
 			  },
 			  "04_pre_stuff" : {
 				"command": "/tmp/init_slave > /var/log/init_slave.log"
 			  },
-			  "05_slave_init" : {
+			  "06_setRegion" : {
+				"command" : "aws configure set region eu-west-2"
+			  },
+			  "07_confeip" : {
+				"command" : "sudo touch /home/ec2-user/archi-back/src/confeip.json && sudo aws ec2 describe-addresses > /home/ec2-user/archi-back/src/confeip.json"
+			  },
+			  "08_getIEP" : {
+				"command" : "cd /home/ec2-user/archi-back/ && sudo python3 /home/ec2-user/archi-back/src/eip.py > /var/log/iepGet.log &"
+			  },
+			  "08_setChangeToMasterIP" : {
+				"command" : "sudo cat /home/ec2-user/SQLConfig.conf >> /home/ec2-user/passToMaster"
+			  },
+			  "08_sed_magic" : {
+			    "command": "sudo chmod 777 /tmp/sedstuff",
+				"command": "sudo chmod 777 /tmp/initSlave.mysql",
+			    "command": "sudo /tmp/sedstuff"
+			  },
+			  "08_slave_init" : {
 				"command" : { "Fn::Join" : ["", ["mysql -u root --password='", { "Ref" : "DBRootPassword" }, "' < /tmp/initSlave.mysql"]]}
+			  },
+			  "08_setPrivilegeToMasterIP" : {
+				"command" : "sudo chmod 777 /home/ec2-user/passToMaster",
+				"command" : "sudo chmod 777 /home/ec2-user/stopSlave"
+			  },
+			  "09_slave_ping" : {
+				"command" : "setsid sudo python3 /home/ec2-user/archi-back/src/ping.py > /dev/null 2>&1 < /dev/null &"
 			  }
-            }
+			}
           }
         }
       },
@@ -1107,6 +1190,7 @@
         "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
                           { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
         "InstanceType"   : { "Ref" : "InstanceType" },
+		"IamInstanceProfile" : { "Ref" : "RootInstanceProfile" },
         "SecurityGroups" : [ {"Ref" : "WebServerSecurityGroup"} ],
         "KeyName"        : { "Ref" : "KeyName" },
         "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
@@ -1138,14 +1222,52 @@
         "GroupDescription" : "Enable HTTP, server port and SSH access",
         "SecurityGroupIngress" : [
           {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"},
+		  {"IpProtocol" : "icmp", "FromPort" : "8", "ToPort" : "-1", "CidrIp" : "0.0.0.0/0"},
 		  {"IpProtocol" : "tcp", "FromPort" : "8080", "ToPort" : "8080", "CidrIp" : "0.0.0.0/0"},
 		  {"IpProtocol" : "tcp", "FromPort" : "5000", "ToPort" : "5000", "CidrIp" : "0.0.0.0/0"},
 		  {"IpProtocol" : "tcp", "FromPort" : "3306", "ToPort" : "3306", "CidrIp" : "0.0.0.0/0"},
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
         ]
       }
-    }
+    },
   
+  
+	"SWITCHRole": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies": [ {
+               "PolicyName": "root",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                     "Effect": "Allow",
+                     "Action": "*",
+                     "Resource": "*"
+                  } ]
+               }
+               } ]
+            }
+      },
+    "RootInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "Roles": [ {
+               "Ref": "SWITCHRole"
+            } ]
+         }
+      }
   
   
   },
